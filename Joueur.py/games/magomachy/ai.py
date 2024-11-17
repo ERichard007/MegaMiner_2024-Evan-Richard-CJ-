@@ -91,13 +91,6 @@ class AI(BaseAI):
         my_wizard = self.game._players[my_player_index].wizard
         opponent_wizard = self.game._players[opponent_index].wizard
 
-        # Log initial game state for debugging
-        print("Turn:", self.game._current_turn)
-        print("My Wizard:", my_wizard)
-        print("Opponent Wizard:", opponent_wizard)
-        print("My Health:", my_wizard._health, "My Aether:", my_wizard._aether)
-        print("Opponent Health:", opponent_wizard._health, "Opponent Aether:", opponent_wizard._aether)
-
         # Choose wizard as strategic at the start
         if self.game._current_turn in [0, 1]:
             self.player.choose_wizard("strategic")
