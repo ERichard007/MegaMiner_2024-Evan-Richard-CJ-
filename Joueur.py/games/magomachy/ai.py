@@ -85,13 +85,11 @@ class AI(BaseAI):
         return -1
         # <<-- /Creer-Merge: Move -->>
     def run_turn(self) -> bool:
-	    # Identify player and opponent
 	    my_player_index = self.game._players.index(self.player)
-	    opponent_index = 1 - my_player_index  # Assuming only two players
+	    opponent_index = 1 - my_player_index 
 	    my_wizard = self.game._players[my_player_index].wizard
 	    opponent_wizard = self.game._players[opponent_index].wizard
 	
-	    # Choose wizard as strategic at the start
 	    if self.game._current_turn in [0, 1]:
 	        self.player.choose_wizard("strategic")
 	        return True
