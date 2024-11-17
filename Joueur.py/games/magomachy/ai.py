@@ -85,14 +85,15 @@ class AI(BaseAI):
         return -1
         # <<-- /Creer-Merge: Move -->>
     def run_turn(self) -> bool:
-        # Find the opponent
-        opponent = next(player for player in game._players if player != self.player)
+        # Identify player and opponent
+        my_player = self.player
+        opponent = next(player for player in self.game._players if player != my_player)
+        my_wizard = my_player.wizard
         opponent_wizard = opponent.wizard
-        my_wizard = self.player.wizard
 
         # Choose wizard as strategic at the start
-        if game._current_turn.turn_number in [0, 1]:
-            self.player.choose_wizard("strategic")
+        if self.game._current_turn.turn_number in [0, 1]:
+            my_player.choose_wizard("strategic")
             return True
 
         # Evaluate state function
@@ -115,10 +116,10 @@ class AI(BaseAI):
 
         # Record opponent move
         def record_opponent_move():
-            if game._current_turn.opponent and game._current_turn.opponent.last_move:
+            if opponent and opponent.last_move:
                 if not hasattr(self, 'opponent_move_history'):
                     self.opponent_move_history = []
-                self.opponent_move_history.append(game._current_turn.opponent.last_move)
+                self.opponent_move_history.append(opponent.last_move)
 
         # Should prune move
         def should_prune_move(move, wizard, opponent):
@@ -223,7 +224,7 @@ class AI(BaseAI):
                 if tile.is_pathable():
                     moves.append(("move", tile))
             for spell in wizard.spells:
-                for tile in game.tiles:
+                for tile in self.game.tiles:
                     if wizard.can_cast(spell, tile):
                         moves.append(("cast", spell, tile))
             return moves
@@ -233,7 +234,7 @@ class AI(BaseAI):
             action, *args = move
             if action == "cast":
                 spell, _ = args
-                if spell == "Teleport Rune" and opponent_wizard.tile in [tile for tile in game.tiles if tile.has_teleport_rune]:
+                if spell == "Teleport Rune" and opponent_wizard.tile in [tile for tile in self.game.tiles if tile.has_teleport_rune]:
                     return 1000
                 elif spell == "Explosion Rune":
                     return 100
