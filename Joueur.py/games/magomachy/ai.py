@@ -85,112 +85,243 @@ class AI(BaseAI):
         return -1
         # <<-- /Creer-Merge: Move -->>
     def run_turn(self) -> bool:
-        """This is called every time it is this AI.player's turn.
 
-        Returns:
-            bool: Represents if you want to end your turn. True means end your turn, False means to keep your turn going and re-call this function.
-        """
-        notChosen = True
-        print("Your turn! Here's the map:")
-        while(True):
-            self.player.choose_wizard("map")
-            if not self.player.wizard and notChosen:
-                print("WARNING: You have not chosen a wizard. Do that ASAP!")
-            elif self.player.wizard:
-                print("HEALTH:",self.player.wizard.health)
-                print("AETHER",self.player.wizard.aether)
-            
-            choice = input('What next? Type help for a list of commands.')
-            components = choice.split()
-            if len(components) == 0:
-                pass
-            elif components[0] == 'help':
-                print("Valid commands:")
-                print("choose [wizardClass]: pick a class at the start of the game")
-                print("move [up, down, right, left]: move in specified direction.")
-                print("cast [spell] [x] [y]: cast spell at specified coordinate")
-                print("spells [wizardClass]: see spell list for given wizard")
-            elif components[0] == 'spells':
-                print("Punch: 0 aether, 1 damage, 1 range")
-                if components[1] == 'aggressive':
-                    print("Fire Slash: 2 aether, 3 damage, 2 range")
-                    print("Thunderous Dash: 3 aether, boosts speed by 2 for 1 turn, lets you swap places with enemy if you pass them")
-                    print("Furious Telekinesis: 4 aether, 1 range, pushes item away, forces other wizard to use it if it hits them")
-                elif components[1] == 'defensive':
-                    print("Rock Lob: 2 aether, 2 damage, exactly 2 or 3 tile range")
-                    print("Force Push: 3 aether, pushes adjacent opponent up to 4 spaces, using items along the way. 3 damage if they hit a wall")
-                    print("Stone Summon: 4 aether, 1 range, summon impassable stone for 10 total turns")
-                elif components[1] == 'sustaining':
-                    print("Calming Blast: 3 aether, fires projectile, on hit steal 1 HP and decrease speed for 1 turn")
-                    print("Teleport: 3 aether, 2 range, move to target tile. Also costs 1 movement.")
-                    print("Dispel Magic: 3 aether, 1 range, deletes target item/rune")
-                elif components[1] == 'strategic':
-                    print("Explosion Rune: 2 aether, 4 damage, 1 range, blows up for 4 damage when stepped on")
-                    print("Heal Rune: 5 aether, 1 range, heals for 5 HP when stepped on (up to max)")
-                    print("Teleport Rune: 3 aether (0 if rune already placed), 1 range, places teleport rune if none exists, or teleports you to it otherwise")
-                    print("Charge Rune: 4 aether, infinite range, blows up for 5 damage in 3 tile radius after 5 turns")
-                    print("Force Pull: 3 aether, 4 range, fires projectile that does no damage, but drags opponent toward you if it hits them, using runes along the way")
-                else:
-                    print("That's not a wizard! Choose aggressive, defensive, sustaining, or strategic.")
-            elif components[0] == 'end':
-                print("Ending turn...")
-                break;
-            elif components[0] == 'choose':
-                wizard = None
-                
-                if self.player.wizard:
-                    print("You've already chosen a wizard!")
-                elif len(components) != 2:
-                    print("Wrong number of arguments!")
-                elif (components[1] == 'aggressive'
-                or components[1] == 'defensive'
-                or components[1] == 'sustaining'
-                or components[1] == 'strategic'):
-                    wizard = components[1]
-                else:
-                    print("Choose aggressive, defensive, sustaining, or strategic.")
-                
-                if wizard:
-                    self.player.choose_wizard(wizard)
-                    notChosen = False
-            elif components[0] == 'move':
-                tile = None
-                if len(components) != 2:
-                    tile = None
-                elif components[1] == 'left':
-                    tile = self.player.wizard.tile.tile_west
-                elif components[1] == 'right':
-                    tile = self.player.wizard.tile.tile_east
-                elif components[1] == 'down':
-                    tile = self.player.wizard.tile.tile_south
-                elif components[1] == 'up':
-                    tile = self.player.wizard.tile.tile_north
-                if tile:
-                    self.player.wizard.move(tile)
-                else:
-                    print("Command not executed. Choose a direction.")
-            elif components[0] == 'cast':
-                #if self.player.wizard.has_cast:
-                    #print("You've already cast a spell this turn...")
-                if len(components) < 4 or len(components) > 5:
-                    print("Wrong number of arguments")
-                else:
-                    spell = components[1]
-                    x = components[2]
-                    y = components[3]
-                    if len(components) == 5:
-                        spell = components[1] + " " + components[2]
-                        x = components[3]
-                        y = components[4]
-                    if not x.isdigit() or not y.isdigit():
-                        print("Choose actual coordinates...")
-                    else:
-                        tile = self.game.get_tile_at(int(x),int(y))
-                        self.player.wizard.cast(spell,tile)
+        self.turn_counter += 1
+        self.record_opponent_move()
+
+        def evaluate_state(wizard, opponent):
+            score = wizard.health - opponent.health
+            score += wizard.aether - opponent.aether
+
+            if wizard.aether <= 0:
+                return float('-inf')
+            if opponent.aether <= 0:
+                return float('inf')
+
+            key_tiles = [tile for tile in self.game.tiles if tile.has_potion or tile.has_rune]
+            rune_proximity_bonus = 0
+
+            for tile in self.game.tiles:
+                if tile.has_rune:
+                    distance_to_rune = abs(wizard.tile.x - tile.x) + abs(wizard.tile.y - tile.y)
+                    if distance_to_rune == 0:
+                        rune_proximity_bonus += 10
+                    elif distance_to_rune == 1:
+                        rune_proximity_bonus += 5
+                    elif distance_to_rune <= 2:
+                        rune_proximity_bonus += 2
+
+            score += rune_proximity_bonus
+
+            if wizard.tile in key_tiles:
+                score += 5
+            if opponent.tile in key_tiles:
+                score -= 5
+
+            return score
+
+        def calculate_damage(base_damage, attacker_attack, defender_defense):
+            bonus = max(0, (attacker_attack - defender_defense) // 2)
+            return base_damage + bonus
+
+        def analyze_opponent_patterns():
+            move_counts = {}
+            for move in self.opponent_move_history:
+                move_key = (move[0], tuple(move[1:]))
+                if move_key not in move_counts:
+                    move_counts[move_key] = 0
+                move_counts[move_key] += 1
+            most_common_moves = sorted(move_counts.items(), key=lambda x: x[1], reverse=True)
+            return [move[0] for move in most_common_moves]
+
+        def should_prune_move(move, wizard, opponent):
+            action, *args = move
+            if action == "move":
+                tile = args[0]
+                if not tile.is_pathable():
+                    return True
+                if tile.has_rune and tile == opponent.tile:
+                    return False
+            elif action == "cast":
+                spell, target_tile = args
+                if spell == "Teleport Rune" and target_tile == opponent.tile:
+                    return False
+                if spell.aether_cost > wizard.aether:
+                    return True
+            return False
+
+        def find_best_moves(wizard, opponent, depth, maximizing_player, alpha=float('-inf'), beta=float('inf')):
+            if depth == 0 or wizard.health <= 0 or opponent.health <= 0 or wizard.aether <= 0 or opponent.aether <= 0:
+                return evaluate_state(wizard, opponent), None, None
+
+            best_move = None
+            best_secondary_move = None
+            if maximizing_player:
+                max_eval = float('-inf')
+                for primary_move in sorted(get_possible_moves(wizard), key=move_priority, reverse=True):
+                    if should_prune_move(primary_move, wizard, opponent):
+                        continue
+                    eval_after_primary = estimate_move_result(primary_move, wizard, opponent, maximizing_player)
+                    if eval_after_primary == float('-inf'):
+                        continue
+                    for secondary_move in sorted(get_possible_moves(wizard), key=move_priority, reverse=True):
+                        if should_prune_move(secondary_move, wizard, opponent):
+                            continue
+                        eval = estimate_move_result(secondary_move, wizard, opponent, maximizing_player) + eval_after_primary
+                        if eval == float('-inf'):
+                            continue
+                        if eval > max_eval:
+                            max_eval = eval
+                            best_move = primary_move
+                            best_secondary_move = secondary_move
+                        alpha = max(alpha, eval)
+                        if beta <= alpha:
+                            break
+                return max_eval, best_move, best_secondary_move
             else:
-                print("Command not recognized, try again")
-        # <<-- Creer-Merge: runTurn -->> - Code you add between this comment and the end comment will be preserved between Creer re-runs.
-        # Put your game logic here for runTurn
+                min_eval = float('inf')
+                for primary_move in sorted(get_possible_moves(opponent), key=move_priority, reverse=True):
+                    if should_prune_move(primary_move, opponent, wizard):
+                        continue
+                    eval_after_primary = estimate_move_result(primary_move, opponent, wizard, maximizing_player)
+                    if eval_after_primary == float('inf'):
+                        continue
+                    for secondary_move in sorted(get_possible_moves(opponent), key=move_priority, reverse=True):
+                        if should_prune_move(secondary_move, opponent, wizard):
+                            continue
+                        eval = estimate_move_result(secondary_move, opponent, wizard, maximizing_player) + eval_after_primary
+                        if eval == float('inf'):
+                            continue
+                        if eval < min_eval:
+                            min_eval = eval
+                            best_move = primary_move
+                            best_secondary_move = secondary_move
+                        beta = min(beta, eval)
+                        if beta <= alpha:
+                            break
+                return min_eval, best_move, best_secondary_move
+
+        def estimate_move_result(move, wizard, opponent, maximizing_player):
+            action, *args = move
+            if action == "move":
+                return evaluate_state(wizard, opponent)
+            elif action == "cast":
+                spell, target_tile = args
+                potential_damage = 0
+                if spell == "Explosion Rune":
+                    potential_damage = calculate_damage(4, wizard.attack, opponent.defense)
+                elif spell == "Charge Rune":
+                    potential_damage = calculate_damage(5, wizard.attack, opponent.defense)
+                elif spell == "Fireball":
+                    potential_damage = calculate_damage(3, wizard.attack, opponent.defense)
+                elif spell == "Force Push":
+                    potential_damage = calculate_damage(2, wizard.attack, opponent.defense)
+                elif spell == "Heal":
+                    potential_damage = -5
+                elif spell == "Teleport Rune":
+                    if target_tile == opponent.tile:
+                        return float('inf')
+                return evaluate_state(wizard, opponent) + potential_damage - spell.aether_cost
+            elif action == "do_nothing":
+                return evaluate_state(wizard, opponent)
+            elif action == "pick_potion":
+                return evaluate_state(wizard, opponent) + 10
+
+        def get_possible_moves(wizard):
+            moves = [("do_nothing",)]
+            for tile in wizard.tile.get_neighbors():
+                if tile.is_pathable():
+                    moves.append(("move", tile))
+            for spell in wizard.spells:
+                for tile in self.game.tiles:
+                    if wizard.can_cast(spell, tile):
+                        moves.append(("cast", spell, tile))
+            for potion in self.game.potions:
+                if wizard.tile == potion.tile:
+                    moves.append(("pick_potion", potion))
+            return moves
+
+        def move_priority(move):
+            action, *args = move
+            if action == "cast":
+                spell, _ = args
+                if spell == "Teleport Rune" and opponent_wizard.tile in [tile for tile in self.game.tiles if tile.has_teleport_rune]:
+                    return 1000
+                elif spell == "Explosion Rune":
+                    return 100
+                elif spell == "Charge Rune":
+                    return 90
+                elif spell == "Fireball":
+                    return 80
+                elif spell == "Heal":
+                    return 50
+            elif action == "move":
+                return 10
+            elif action == "pick_potion":
+                return 20
+            return 0
+
+        def record_opponent_move():
+            if self.turn_counter > 1:
+                opponent = self.player.opponent.wizard
+                if opponent and opponent.last_move:
+                    self.opponent_move_history.append(opponent.last_move)
+
+        def get_best_rune_placement(rune_type):
+            scores = {}
+            for tile in self.game.tiles:
+                if tile.is_pathable():
+                    score = 0
+                    choke_points = [tile for tile in self.game.tiles if tile.is_choke_point]
+                    if tile.has_potion or tile in choke_points:
+                        score += 5
+                    if tile == opponent_wizard.tile and rune_type == "Teleport":
+                        score += 1000
+                    scores[tile] = score
+            return max(scores, key=scores.get)
+
+        my_wizard = self.player.wizard
+        opponent_wizard = self.player.opponent.wizard
+
+        if not my_wizard:
+            if self.player.turn_number == 1:
+                self.player.choose_wizard("strategic")
+            elif self.player.turn_number == 2:
+                self.player.choose_wizard("aggressive")
+            return True
+
+        depth = 3 if my_wizard.health > 10 else 5
+
+        state_evaluation = evaluate_state(my_wizard, opponent_wizard)
+        if state_evaluation > 0:
+            self.no_advantage_counter = 0
+            self.advantage_turns += 1
+        else:
+            self.no_advantage_counter += 1
+
+        if self.no_advantage_counter >= 5:
+            opponent_patterns = analyze_opponent_patterns()
+
+        _, best_move, best_secondary_move = find_best_moves(my_wizard, opponent_wizard, depth, True)
+
+        if best_move:
+            action, *args = best_move
+            if action == "move":
+                my_wizard.move(args[0])
+            elif action == "cast":
+                my_wizard.cast(args[0], args[1])
+            elif action == "pick_potion":
+                my_wizard.pick_potion(args[0])
+
+        if best_secondary_move:
+            action, *args = best_secondary_move
+            if action == "move":
+                my_wizard.move(args[0])
+            elif action == "cast":
+                my_wizard.cast(args[0], args[1])
+            elif action == "pick_potion":
+                my_wizard.pick_potion(args[0])
+
         return True
         # <<-- /Creer-Merge: runTurn -->>
 
