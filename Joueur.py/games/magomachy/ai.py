@@ -84,68 +84,228 @@ class AI(BaseAI):
         # Put your game logic here for Move
         return -1
         # <<-- /Creer-Merge: Move -->>
-    def run_turn(self):
-        # Identify self and opponent
+    def run_turn(self) -> bool:
+        # Identify player and opponent
         my_player_index = self.game._players.index(self.player)
-        opponent_index = 1 - my_player_index  # Assuming two players
+        opponent_index = 1 - my_player_index  # Assuming only two players
         my_wizard = self.game._players[my_player_index].wizard
         opponent_wizard = self.game._players[opponent_index].wizard
 
-        # Choose a defensive wizard at the start
+        # Log initial game state for debugging
+        print("Turn:", self.game._current_turn)
+        print("My Wizard:", my_wizard)
+        print("Opponent Wizard:", opponent_wizard)
+        print("My Health:", my_wizard._health, "My Aether:", my_wizard._aether)
+        print("Opponent Health:", opponent_wizard._health, "Opponent Aether:", opponent_wizard._aether)
+
+        # Choose wizard as strategic at the start
         if self.game._current_turn in [0, 1]:
-            self.player.choose_wizard("defensive")
+            self.player.choose_wizard("strategic")
             return True
 
-        # Define simple AI logic
-        def get_possible_moves():
-            moves = [("do_nothing",)]
+        # Evaluate state function
+        def evaluate_state(wizard, opponent):
+            score = wizard._health - opponent._health
+            score += wizard._aether - opponent._aether
 
-            # Movement options
-            for tile in my_wizard.tile.get_neighbors():
+            # Increase aggression as the turn count approaches 200
+            remaining_turns = 200 - self.game._current_turn
+            if remaining_turns <= 50:
+                score *= (1 + (50 - remaining_turns) / 50)  # Aggression multiplier
+
+            # Check for losing conditions
+            if wizard._aether <= 0:
+                return float('-inf')
+            if opponent._aether <= 0:
+                return float('inf')
+
+            return score
+
+        # Calculate damage function
+        def calculate_damage(base_damage, attacker_attack, defender_defense):
+            bonus = max(0, (attacker_attack - defender_defense) / 2)
+            return round(base_damage + bonus)
+
+        # Should prune move
+        def should_prune_move(move, wizard, opponent):
+            action, *args = move
+            if action == "move":
+                tile = args[0]
+                if not tile.is_pathable():
+                    return True
+                if tile.has_rune and tile == opponent.tile:
+                    return False
+            elif action == "cast":
+                spell, target_tile = args
+                if spell == "Teleport Rune" and target_tile == opponent.tile:
+                    return False
+                if spell.aether_cost > wizard._aether:
+                    return True
+            return False
+
+        # Recursive backtracking for finding best moves
+        def find_best_moves(wizard, opponent, depth, maximizing_player, alpha=float('-inf'), beta=float('inf')):
+            if depth == 0 or wizard._health <= 0 or opponent._health <= 0 or wizard._aether <= 0 or opponent._aether <= 0:
+                return evaluate_state(wizard, opponent), None, None
+
+            best_move = None
+            best_secondary_move = None
+            if maximizing_player:
+                max_eval = float('-inf')
+                for primary_move in sorted(get_possible_moves(wizard), key=move_priority, reverse=True):
+                    if should_prune_move(primary_move, wizard, opponent):
+                        continue
+                    eval_after_primary = estimate_move_result(primary_move, wizard, opponent, maximizing_player)
+                    if eval_after_primary == float('-inf'):
+                        continue
+                    for secondary_move in sorted(get_possible_moves(wizard), key=move_priority, reverse=True):
+                        if should_prune_move(secondary_move, wizard, opponent):
+                            continue
+                        eval = estimate_move_result(secondary_move, wizard, opponent, maximizing_player) + eval_after_primary
+                        if eval == float('-inf'):
+                            continue
+                        if eval > max_eval:
+                            max_eval = eval
+                            best_move = primary_move
+                            best_secondary_move = secondary_move
+                        alpha = max(alpha, eval)
+                        if beta <= alpha:
+                            break
+                return max_eval, best_move, best_secondary_move
+            else:
+                min_eval = float('inf')
+                for primary_move in sorted(get_possible_moves(opponent), key=move_priority, reverse=True):
+                    if should_prune_move(primary_move, opponent, wizard):
+                        continue
+                    eval_after_primary = estimate_move_result(primary_move, opponent, wizard, maximizing_player)
+                    if eval_after_primary == float('inf'):
+                        continue
+                    for secondary_move in sorted(get_possible_moves(opponent), key=move_priority, reverse=True):
+                        if should_prune_move(secondary_move, opponent, wizard):
+                            continue
+                        eval = estimate_move_result(secondary_move, opponent, wizard, maximizing_player) + eval_after_primary
+                        if eval == float('inf'):
+                            continue
+                        if eval < min_eval:
+                            min_eval = eval
+                            best_move = primary_move
+                            best_secondary_move = secondary_move
+                        beta = min(beta, eval)
+                        if beta <= alpha:
+                            break
+                return min_eval, best_move, best_secondary_move
+
+        # Estimate move result
+        def estimate_move_result(move, wizard, opponent, maximizing_player):
+            action, *args = move
+            if action == "move":
+                return evaluate_state(wizard, opponent)
+            elif action == "cast":
+                spell, target_tile = args
+                potential_damage = 0
+                if spell == "Explosion Rune":
+                    potential_damage = calculate_damage(4, wizard._attack, opponent._defense)
+                elif spell == "Charge Rune":
+                    potential_damage = calculate_damage(5, wizard._attack, opponent._defense)
+                elif spell == "Fireball":
+                    potential_damage = calculate_damage(3, wizard._attack, opponent._defense)
+                elif spell == "Force Push":
+                    potential_damage = calculate_damage(2, wizard._attack, opponent._defense)
+                elif spell == "Heal":
+                    potential_damage = -5
+                elif spell == "Teleport Rune":
+                    if target_tile == opponent.tile:
+                        return float('inf')
+                return evaluate_state(wizard, opponent) + potential_damage - spell.aether_cost
+            elif action == "do_nothing":
+                return evaluate_state(wizard, opponent)
+            elif action == "pick_potion":
+                return evaluate_state(wizard, opponent) + 10
+
+        # Possible moves
+        def get_possible_moves(wizard):
+            moves = [("do_nothing",)]
+            for tile in wizard.tile.get_neighbors():
                 if tile.is_pathable():
                     moves.append(("move", tile))
 
-            # Simple spells for the defensive wizard
-            def calculate_distance(tile1, tile2):
-                return abs(tile1.x - tile2.x) + abs(tile1.y - tile2.y)
+            if self.game._players[my_player_index].wizard == "strategic":
+                if wizard._aether >= 2:
+                    moves.append(("cast", "Explosion Rune", wizard.tile))
+                if wizard._aether >= 5:
+                    moves.append(("cast", "Heal Rune", wizard.tile))
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Teleport Rune", wizard.tile))
+                if wizard._aether >= 4:
+                    moves.append(("cast", "Charge Rune", wizard.tile))
 
-            if my_wizard._aether >= 2 and calculate_distance(my_wizard.tile, opponent_wizard.tile) <= 3:
-                moves.append(("cast", "Rock Lob", opponent_wizard.tile))
-            if my_wizard._aether >= 3 and calculate_distance(my_wizard.tile, opponent_wizard.tile) <= 1:
-                moves.append(("cast", "Force Push", opponent_wizard.tile))
-            if my_wizard._aether >= 4 and not my_wizard.tile.has_rune:
-                moves.append(("cast", "Stone Summon", my_wizard.tile))
+            elif self.game._players[my_player_index].wizard == "aggressive":
+                if wizard._aether >= 2:
+                    moves.append(("cast", "Fire Slash", wizard.tile))
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Thunderous Dash", wizard.tile))
+                if wizard._aether >= 4:
+                    moves.append(("cast", "Furious Telekinesis", wizard.tile))
+
+            elif self.game._players[my_player_index].wizard == "defensive":
+                if wizard._aether >= 2:
+                    moves.append(("cast", "Rock Lob", wizard.tile))
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Force Push", wizard.tile))
+                if wizard._aether >= 4:
+                    moves.append(("cast", "Stone Summon", wizard.tile))
+
+            elif self.game._players[my_player_index].wizard == "sustaining":
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Calming Blast", wizard.tile))
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Teleport", wizard.tile))
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Dispel Magic", wizard.tile))
 
             return moves
 
-        def evaluate_move(move):
+        # Move priority
+        def move_priority(move):
             action, *args = move
             if action == "cast":
-                spell, target_tile = args
-                if spell == "Rock Lob":
-                    return 50  # Moderate damage spell
-                if spell == "Force Push":
-                    return 70  # Pushes opponent, useful strategically
-                if spell == "Stone Summon":
-                    return 30  # Blocks tiles, defensive
+                spell, _ = args
+                if spell == "Teleport Rune" and opponent_wizard.tile in [tile for tile in self.game.tiles if tile.has_teleport_rune]:
+                    return 1000
+                elif spell == "Explosion Rune":
+                    return 100
+                elif spell == "Charge Rune":
+                    return 90
+                elif spell == "Fireball":
+                    return 80
+                       elif spell == "Heal":
+                    return 50
             elif action == "move":
-                return 10  # Movement is less prioritized
-            elif action == "do_nothing":
-                return 0  # Do nothing only if necessary
+                return 10
+            elif action == "pick_potion":
+                return 20
+            return 0
 
-        # Find the best move
-        possible_moves = get_possible_moves()
-        best_move = max(possible_moves, key=evaluate_move)
+        depth = 3 if my_wizard._health > 10 else 5
+        _, best_move, best_secondary_move = find_best_moves(my_wizard, opponent_wizard, depth, True)
 
-        # Execute the best move
-        action, *args = best_move
-        if action == "move":
-            my_wizard.move(args[0])
-        elif action == "cast":
-            try:
+        if best_move:
+            action, *args = best_move
+            if action == "move":
+                my_wizard.move(args[0])
+            elif action == "cast":
                 my_wizard.cast(args[0], args[1])
-            except Exception as e:
-                print(f"Failed to cast spell: {e}")
+
+        if best_secondary_move:
+            action, *args = best_secondary_move
+            if action == "move":
+                my_wizard.move(args[0])
+            elif action == "cast":
+                my_wizard.cast(args[0], args[1])
+
+        # If the turn reaches 200, end in a draw
+        if self.game._current_turn >= 200:
+            print("Game ends in a draw via coinflip.")
 
         return True
         # <<-- /Creer-Merge: runTurn -->>
