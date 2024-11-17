@@ -92,7 +92,7 @@ class AI(BaseAI):
         opponent_wizard = opponent.wizard
 
         # Choose wizard as strategic at the start
-        if self.game._current_turn.turn_number in [0, 1]:
+        if self.game._current_turn in [0, 1]:
             my_player.choose_wizard("strategic")
             return True
 
