@@ -216,10 +216,41 @@ class AI(BaseAI):
             for tile in wizard.tile.get_neighbors():
                 if tile.is_pathable():
                     moves.append(("move", tile))
-            for spell in wizard.spells:
-                for tile in self.game.tiles:
-                    if wizard.can_cast(spell, tile):
-                        moves.append(("cast", spell, tile))
+
+            if wizard._type == "strategic":
+                if wizard._aether >= 2:
+                    moves.append(("cast", "Explosion Rune", wizard.tile))
+                if wizard._aether >= 5:
+                    moves.append(("cast", "Heal Rune", wizard.tile))
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Teleport Rune", wizard.tile))
+                if wizard._aether >= 4:
+                    moves.append(("cast", "Charge Rune", wizard.tile))
+
+            elif wizard._type == "aggressive":
+                if wizard._aether >= 2:
+                    moves.append(("cast", "Fire Slash", wizard.tile))
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Thunderous Dash", wizard.tile))
+                if wizard._aether >= 4:
+                    moves.append(("cast", "Furious Telekinesis", wizard.tile))
+
+            elif wizard._type == "defensive":
+                if wizard._aether >= 2:
+                    moves.append(("cast", "Rock Lob", wizard.tile))
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Force Push", wizard.tile))
+                if wizard._aether >= 4:
+                    moves.append(("cast", "Stone Summon", wizard.tile))
+
+            elif wizard._type == "sustaining":
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Calming Blast", wizard.tile))
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Teleport", wizard.tile))
+                if wizard._aether >= 3:
+                    moves.append(("cast", "Dispel Magic", wizard.tile))
+
             return moves
 
         # Move priority
