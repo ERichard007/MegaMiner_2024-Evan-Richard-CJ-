@@ -114,13 +114,6 @@ class AI(BaseAI):
             bonus = max(0, (attacker_attack - defender_defense) / 2)
             return round(base_damage + bonus)
 
-        # Record opponent move
-        def record_opponent_move():
-            if opponent and opponent.last_move:
-                if not hasattr(self, 'opponent_move_history'):
-                    self.opponent_move_history = []
-                self.opponent_move_history.append(opponent.last_move)
-
         # Should prune move
         def should_prune_move(move, wizard, opponent):
             action, *args = move
@@ -249,8 +242,6 @@ class AI(BaseAI):
             elif action == "pick_potion":
                 return 20
             return 0
-
-        record_opponent_move()
 
         depth = 3 if my_wizard._health > 10 else 5
         _, best_move, best_secondary_move = find_best_moves(my_wizard, opponent_wizard, depth, True)
