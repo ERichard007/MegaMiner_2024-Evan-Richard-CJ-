@@ -101,6 +101,11 @@ class AI(BaseAI):
             score = wizard._health - opponent._health
             score += wizard._aether - opponent._aether
 
+            # Increase aggression as the turn count approaches 200
+            remaining_turns = 200 - self.game._current_turn
+            if remaining_turns <= 50:
+                score *= (1 + (50 - remaining_turns) / 50)  # Aggression multiplier
+
             # Check for losing conditions
             if wizard._aether <= 0:
                 return float('-inf')
@@ -290,6 +295,10 @@ class AI(BaseAI):
                 my_wizard.move(args[0])
             elif action == "cast":
                 my_wizard.cast(args[0], args[1])
+
+        # If the turn reaches 200, end in a draw
+        if self.game._current_turn >= 200:
+            print("Game ends in a draw via coinflip.")
 
         return True
         # <<-- /Creer-Merge: runTurn -->>
