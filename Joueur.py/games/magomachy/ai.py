@@ -85,55 +85,42 @@ class AI(BaseAI):
         return -1
         # <<-- /Creer-Merge: Move -->>
     def run_turn(self) -> bool:
+        # Find the opponent
+        opponent = next(player for player in game._players if player != self.player)
+        opponent_wizard = opponent.wizard
+        my_wizard = self.player.wizard
 
-        self.turn_counter += 1
-        self.record_opponent_move()
+        # Choose wizard as strategic at the start
+        if game._current_turn.turn_number in [0, 1]:
+            self.player.choose_wizard("strategic")
+            return True
 
+        # Evaluate state function
         def evaluate_state(wizard, opponent):
-            score = wizard.health - opponent.health
-            score += wizard.aether - opponent.aether
+            score = wizard._health - opponent._health
+            score += wizard._aether - opponent._aether
 
-            if wizard.aether <= 0:
+            # Check for losing conditions
+            if wizard._aether <= 0:
                 return float('-inf')
-            if opponent.aether <= 0:
+            if opponent._aether <= 0:
                 return float('inf')
-
-            key_tiles = [tile for tile in self.game.tiles if tile.has_potion or tile.has_rune]
-            rune_proximity_bonus = 0
-
-            for tile in self.game.tiles:
-                if tile.has_rune:
-                    distance_to_rune = abs(wizard.tile.x - tile.x) + abs(wizard.tile.y - tile.y)
-                    if distance_to_rune == 0:
-                        rune_proximity_bonus += 10
-                    elif distance_to_rune == 1:
-                        rune_proximity_bonus += 5
-                    elif distance_to_rune <= 2:
-                        rune_proximity_bonus += 2
-
-            score += rune_proximity_bonus
-
-            if wizard.tile in key_tiles:
-                score += 5
-            if opponent.tile in key_tiles:
-                score -= 5
 
             return score
 
+        # Calculate damage function
         def calculate_damage(base_damage, attacker_attack, defender_defense):
-            bonus = max(0, (attacker_attack - defender_defense) // 2)
-            return base_damage + bonus
+            bonus = max(0, (attacker_attack - defender_defense) / 2)
+            return round(base_damage + bonus)
 
-        def analyze_opponent_patterns():
-            move_counts = {}
-            for move in self.opponent_move_history:
-                move_key = (move[0], tuple(move[1:]))
-                if move_key not in move_counts:
-                    move_counts[move_key] = 0
-                move_counts[move_key] += 1
-            most_common_moves = sorted(move_counts.items(), key=lambda x: x[1], reverse=True)
-            return [move[0] for move in most_common_moves]
+        # Record opponent move
+        def record_opponent_move():
+            if game._current_turn.opponent and game._current_turn.opponent.last_move:
+                if not hasattr(self, 'opponent_move_history'):
+                    self.opponent_move_history = []
+                self.opponent_move_history.append(game._current_turn.opponent.last_move)
 
+        # Should prune move
         def should_prune_move(move, wizard, opponent):
             action, *args = move
             if action == "move":
@@ -146,12 +133,13 @@ class AI(BaseAI):
                 spell, target_tile = args
                 if spell == "Teleport Rune" and target_tile == opponent.tile:
                     return False
-                if spell.aether_cost > wizard.aether:
+                if spell.aether_cost > wizard._aether:
                     return True
             return False
 
+        # Recursive backtracking for finding best moves
         def find_best_moves(wizard, opponent, depth, maximizing_player, alpha=float('-inf'), beta=float('inf')):
-            if depth == 0 or wizard.health <= 0 or opponent.health <= 0 or wizard.aether <= 0 or opponent.aether <= 0:
+            if depth == 0 or wizard._health <= 0 or opponent._health <= 0 or wizard._aether <= 0 or opponent._aether <= 0:
                 return evaluate_state(wizard, opponent), None, None
 
             best_move = None
@@ -201,6 +189,7 @@ class AI(BaseAI):
                             break
                 return min_eval, best_move, best_secondary_move
 
+        # Estimate move result
         def estimate_move_result(move, wizard, opponent, maximizing_player):
             action, *args = move
             if action == "move":
@@ -209,13 +198,13 @@ class AI(BaseAI):
                 spell, target_tile = args
                 potential_damage = 0
                 if spell == "Explosion Rune":
-                    potential_damage = calculate_damage(4, wizard.attack, opponent.defense)
+                    potential_damage = calculate_damage(4, wizard._attack, opponent._defense)
                 elif spell == "Charge Rune":
-                    potential_damage = calculate_damage(5, wizard.attack, opponent.defense)
+                    potential_damage = calculate_damage(5, wizard._attack, opponent._defense)
                 elif spell == "Fireball":
-                    potential_damage = calculate_damage(3, wizard.attack, opponent.defense)
+                    potential_damage = calculate_damage(3, wizard._attack, opponent._defense)
                 elif spell == "Force Push":
-                    potential_damage = calculate_damage(2, wizard.attack, opponent.defense)
+                    potential_damage = calculate_damage(2, wizard._attack, opponent._defense)
                 elif spell == "Heal":
                     potential_damage = -5
                 elif spell == "Teleport Rune":
@@ -227,25 +216,24 @@ class AI(BaseAI):
             elif action == "pick_potion":
                 return evaluate_state(wizard, opponent) + 10
 
+        # Possible moves
         def get_possible_moves(wizard):
             moves = [("do_nothing",)]
             for tile in wizard.tile.get_neighbors():
                 if tile.is_pathable():
                     moves.append(("move", tile))
             for spell in wizard.spells:
-                for tile in self.game.tiles:
+                for tile in game.tiles:
                     if wizard.can_cast(spell, tile):
                         moves.append(("cast", spell, tile))
-            for potion in self.game.potions:
-                if wizard.tile == potion.tile:
-                    moves.append(("pick_potion", potion))
             return moves
 
+        # Move priority
         def move_priority(move):
             action, *args = move
             if action == "cast":
                 spell, _ = args
-                if spell == "Teleport Rune" and opponent_wizard.tile in [tile for tile in self.game.tiles if tile.has_teleport_rune]:
+                if spell == "Teleport Rune" and opponent_wizard.tile in [tile for tile in game.tiles if tile.has_teleport_rune]:
                     return 1000
                 elif spell == "Explosion Rune":
                     return 100
@@ -261,47 +249,9 @@ class AI(BaseAI):
                 return 20
             return 0
 
-        def record_opponent_move():
-            if self.turn_counter > 1:
-                opponent = self.player.opponent.wizard
-                if opponent and opponent.last_move:
-                    self.opponent_move_history.append(opponent.last_move)
+        record_opponent_move()
 
-        def get_best_rune_placement(rune_type):
-            scores = {}
-            for tile in self.game.tiles:
-                if tile.is_pathable():
-                    score = 0
-                    choke_points = [tile for tile in self.game.tiles if tile.is_choke_point]
-                    if tile.has_potion or tile in choke_points:
-                        score += 5
-                    if tile == opponent_wizard.tile and rune_type == "Teleport":
-                        score += 1000
-                    scores[tile] = score
-            return max(scores, key=scores.get)
-
-        my_wizard = self.player.wizard
-        opponent_wizard = self.player.opponent.wizard
-
-        if not my_wizard:
-            if self.player.turn_number == 1:
-                self.player.choose_wizard("strategic")
-            elif self.player.turn_number == 2:
-                self.player.choose_wizard("aggressive")
-            return True
-
-        depth = 3 if my_wizard.health > 10 else 5
-
-        state_evaluation = evaluate_state(my_wizard, opponent_wizard)
-        if state_evaluation > 0:
-            self.no_advantage_counter = 0
-            self.advantage_turns += 1
-        else:
-            self.no_advantage_counter += 1
-
-        if self.no_advantage_counter >= 5:
-            opponent_patterns = analyze_opponent_patterns()
-
+        depth = 3 if my_wizard._health > 10 else 5
         _, best_move, best_secondary_move = find_best_moves(my_wizard, opponent_wizard, depth, True)
 
         if best_move:
@@ -310,8 +260,6 @@ class AI(BaseAI):
                 my_wizard.move(args[0])
             elif action == "cast":
                 my_wizard.cast(args[0], args[1])
-            elif action == "pick_potion":
-                my_wizard.pick_potion(args[0])
 
         if best_secondary_move:
             action, *args = best_secondary_move
@@ -319,10 +267,9 @@ class AI(BaseAI):
                 my_wizard.move(args[0])
             elif action == "cast":
                 my_wizard.cast(args[0], args[1])
-            elif action == "pick_potion":
-                my_wizard.pick_potion(args[0])
 
         return True
+
         # <<-- /Creer-Merge: runTurn -->>
 
     def find_path(self, start: 'games.magomachy.tile.Tile', goal: 'games.magomachy.tile.Tile') -> List['games.magomachy.tile.Tile']:
