@@ -278,7 +278,7 @@ class AI(BaseAI):
                     return 90
                 elif spell == "Fireball":
                     return 80
-                       elif spell == "Heal":
+                elif spell == "Heal":
                     return 50
             elif action == "move":
                 return 10
