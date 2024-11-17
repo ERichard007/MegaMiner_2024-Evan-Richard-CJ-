@@ -113,7 +113,7 @@ class AI(BaseAI):
                 moves.append(("cast", "Rock Lob", opponent_wizard.tile))
             if my_wizard._aether >= 3 and calculate_distance(my_wizard.tile, opponent_wizard.tile) <= 1:
                 moves.append(("cast", "Force Push", opponent_wizard.tile))
-            if my_wizard._aether >= 4:
+            if my_wizard._aether >= 4 and not my_wizard.tile.has_rune:
                 moves.append(("cast", "Stone Summon", my_wizard.tile))
 
             return moves
