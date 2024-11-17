@@ -106,9 +106,12 @@ class AI(BaseAI):
                     moves.append(("move", tile))
 
             # Simple spells for the defensive wizard
-            if my_wizard._aether >= 2 and my_wizard.tile.distance_to(opponent_wizard.tile) <= 3:
+            def calculate_distance(tile1, tile2):
+                return abs(tile1.x - tile2.x) + abs(tile1.y - tile2.y)
+
+            if my_wizard._aether >= 2 and calculate_distance(my_wizard.tile, opponent_wizard.tile) <= 3:
                 moves.append(("cast", "Rock Lob", opponent_wizard.tile))
-            if my_wizard._aether >= 3 and my_wizard.tile.distance_to(opponent_wizard.tile) <= 1:
+            if my_wizard._aether >= 3 and calculate_distance(my_wizard.tile, opponent_wizard.tile) <= 1:
                 moves.append(("cast", "Force Push", opponent_wizard.tile))
             if my_wizard._aether >= 4:
                 moves.append(("cast", "Stone Summon", my_wizard.tile))
