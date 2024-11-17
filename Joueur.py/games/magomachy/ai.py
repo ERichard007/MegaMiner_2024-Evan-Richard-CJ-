@@ -91,10 +91,14 @@ class AI(BaseAI):
         my_wizard = self.game._players[my_player_index].wizard
         opponent_wizard = self.game._players[opponent_index].wizard
 
+
         # Choose wizard as strategic at the start
-        if self.game._current_turn in [0, 1]:
+        if self.game._current_turn == 0:
             self.player.choose_wizard("strategic")
             return True
+	if self.game._current_turn == 1:
+	    self.player.choose_wizard("aggressive")
+	    return True
 
         # Evaluate state function
         def evaluate_state(wizard, opponent):
