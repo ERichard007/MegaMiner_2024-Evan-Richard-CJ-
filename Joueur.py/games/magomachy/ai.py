@@ -86,14 +86,14 @@ class AI(BaseAI):
         # <<-- /Creer-Merge: Move -->>
     def run_turn(self) -> bool:
         # Identify player and opponent
-        my_player = self.player
-        opponent = next(player for player in self.game._players if player != my_player)
-        my_wizard = my_player.wizard
-        opponent_wizard = self.game._players[opponent].wizard
+        my_player_index = self.game._players.index(self.player)
+        opponent_index = 1 - my_player_index  # Assuming only two players
+        my_wizard = self.game._players[my_player_index].wizard
+        opponent_wizard = self.game._players[opponent_index].wizard
 
         # Choose wizard as strategic at the start
         if self.game._current_turn in [0, 1]:
-            my_player.choose_wizard("strategic")
+            self.player.choose_wizard("strategic")
             return True
 
         # Evaluate state function
@@ -217,7 +217,7 @@ class AI(BaseAI):
                 if tile.is_pathable():
                     moves.append(("move", tile))
 
-            if self.game._players[my_player].wizard == "strategic":
+            if self.game._players[my_player_index].wizard == "strategic":
                 if wizard._aether >= 2:
                     moves.append(("cast", "Explosion Rune", wizard.tile))
                 if wizard._aether >= 5:
@@ -227,7 +227,7 @@ class AI(BaseAI):
                 if wizard._aether >= 4:
                     moves.append(("cast", "Charge Rune", wizard.tile))
 
-            elif self.game._players[my_player].wizard == "aggressive":
+            elif self.game._players[my_player_index].wizard == "aggressive":
                 if wizard._aether >= 2:
                     moves.append(("cast", "Fire Slash", wizard.tile))
                 if wizard._aether >= 3:
@@ -235,7 +235,7 @@ class AI(BaseAI):
                 if wizard._aether >= 4:
                     moves.append(("cast", "Furious Telekinesis", wizard.tile))
 
-            elif self.game._players[my_player].wizard == "defensive":
+            elif self.game._players[my_player_index].wizard == "defensive":
                 if wizard._aether >= 2:
                     moves.append(("cast", "Rock Lob", wizard.tile))
                 if wizard._aether >= 3:
@@ -243,7 +243,7 @@ class AI(BaseAI):
                 if wizard._aether >= 4:
                     moves.append(("cast", "Stone Summon", wizard.tile))
 
-            elif self.game._players[my_player].wizard == "sustaining":
+            elif self.game._players[my_player_index].wizard == "sustaining":
                 if wizard._aether >= 3:
                     moves.append(("cast", "Calming Blast", wizard.tile))
                 if wizard._aether >= 3:
@@ -292,8 +292,6 @@ class AI(BaseAI):
                 my_wizard.cast(args[0], args[1])
 
         return True
-
-
         # <<-- /Creer-Merge: runTurn -->>
 
     def find_path(self, start: 'games.magomachy.tile.Tile', goal: 'games.magomachy.tile.Tile') -> List['games.magomachy.tile.Tile']:
