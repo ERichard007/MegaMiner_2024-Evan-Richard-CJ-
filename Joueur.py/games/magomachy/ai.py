@@ -217,7 +217,7 @@ class AI(BaseAI):
                 if tile.is_pathable():
                     moves.append(("move", tile))
 
-            if wizard._type == "strategic":
+            if player._wizard == "strategic":
                 if wizard._aether >= 2:
                     moves.append(("cast", "Explosion Rune", wizard.tile))
                 if wizard._aether >= 5:
