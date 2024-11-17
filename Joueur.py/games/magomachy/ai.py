@@ -106,9 +106,9 @@ class AI(BaseAI):
                     moves.append(("move", tile))
 
             # Simple spells for the defensive wizard
-            if my_wizard._aether >= 2:
+            if my_wizard._aether >= 2 and my_wizard.tile.distance_to(opponent_wizard.tile) <= 3:
                 moves.append(("cast", "Rock Lob", opponent_wizard.tile))
-            if my_wizard._aether >= 3:
+            if my_wizard._aether >= 3 and my_wizard.tile.distance_to(opponent_wizard.tile) <= 1:
                 moves.append(("cast", "Force Push", opponent_wizard.tile))
             if my_wizard._aether >= 4:
                 moves.append(("cast", "Stone Summon", my_wizard.tile))
@@ -139,7 +139,10 @@ class AI(BaseAI):
         if action == "move":
             my_wizard.move(args[0])
         elif action == "cast":
-            my_wizard.cast(args[0], args[1])
+            try:
+                my_wizard.cast(args[0], args[1])
+            except Exception as e:
+                print(f"Failed to cast spell: {e}")
 
         return True
         # <<-- /Creer-Merge: runTurn -->>
